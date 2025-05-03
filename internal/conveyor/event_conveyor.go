@@ -11,7 +11,7 @@ type EventParser interface {
 	Parse(line string) (models.EventParsedDto, error)
 }
 
-type InputReader interface {
+type EventsInputReader interface {
 	ReadData() ([]string, error)
 }
 
@@ -26,10 +26,11 @@ type CompetitorService interface{}
 type EventConveyor struct {
 	Parser EventParser
 	Writer OutputWriter
-	Reader InputReader
+	Reader EventsInputReader
 }
 
-func NewEventConveyor(p EventParser, w OutputWriter, r InputReader) *EventConveyor {
+func NewEventConveyor(p EventParser,
+	w OutputWriter, r EventsInputReader) *EventConveyor {
 	return &EventConveyor{Parser: p, Writer: w, Reader: r}
 }
 

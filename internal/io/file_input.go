@@ -11,7 +11,7 @@ type FileInputReaderImpl struct {
 	Filename string
 }
 
-func NewFileInputReaderImpl(filename string) conveyor.InputReader {
+func NewFileInputReaderImpl(filename string) conveyor.EventsInputReader {
 	return &FileInputReaderImpl{Filename: filename}
 }
 
