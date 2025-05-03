@@ -6,18 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Dmitriy-M1319/biatlon-prototype/internal/conveyor"
 	"github.com/Dmitriy-M1319/biatlon-prototype/internal/models"
 )
 
-// TODO: вынести интерфейс в зону event conveyor
-
-type EventParser interface {
-	Parse(line string) (models.EventParsedDto, error)
-}
-
 type EventParserImpl struct{}
 
-func NewEventParserImpl() EventParser {
+func NewEventParserImpl() conveyor.EventParser {
 	return &EventParserImpl{}
 }
 
@@ -31,7 +26,7 @@ func (p *EventParserImpl) Parse(line string) (models.EventParsedDto, error) {
 	timestampStr := parts[0]
 	timestamp, err := time.Parse("15:04:05.000", timestampStr[1:len(timestampStr)-1])
 	if err != nil {
-		return result, nil
+		return result, err
 	}
 	result.Timestamp = timestamp
 
@@ -49,16 +44,20 @@ func (p *EventParserImpl) Parse(line string) (models.EventParsedDto, error) {
 
 	switch eventID {
 	case 2:
+		result.ExtraParams = make(map[string]string)
 		result.ExtraParams["startTime"] = parts[3]
 		break
 	case 5:
-		result.ExtraParams["firingRane"] = parts[3]
+		result.ExtraParams = make(map[string]string)
+		result.ExtraParams["firingRange"] = parts[3]
 		break
 	case 6:
+		result.ExtraParams = make(map[string]string)
 		result.ExtraParams["target"] = parts[3]
 		break
 	case 11:
-		result.ExtraParams["comment"] = parts[3]
+		result.ExtraParams = make(map[string]string)
+		result.ExtraParams["comment"] = strings.Join(parts[3:], " ")
 		break
 	}
 
