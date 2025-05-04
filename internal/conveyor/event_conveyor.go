@@ -1,11 +1,11 @@
 package conveyor
 
 import (
-	"github.com/Dmitriy-M1319/biatlon-prototype/internal/models"
-)
+	"sort"
 
-// Абстракции
-// TODO: Интерфейс обработки логики соревнований Service
+	"github.com/Dmitriy-M1319/biatlon-prototype/internal/models"
+	"github.com/Dmitriy-M1319/biatlon-prototype/internal/service"
+)
 
 type EventParser interface {
 	Parse(line string) (models.EventParsedDto, error)
@@ -17,21 +17,21 @@ type EventsInputReader interface {
 
 type OutputWriter interface {
 	InsertLog(e models.EventParsedDto)
-	InsertResult(line string)
+	InsertResult(r *models.CompetitorResult)
 	Write() error
 }
 
-type CompetitorService interface{}
-
 type EventConveyor struct {
-	Parser EventParser
-	Writer OutputWriter
-	Reader EventsInputReader
+	Parser      EventParser
+	Writer      OutputWriter
+	Reader      EventsInputReader
+	Competitors map[uint32]*service.CompetitorService
 }
 
 func NewEventConveyor(p EventParser,
 	w OutputWriter, r EventsInputReader) *EventConveyor {
-	return &EventConveyor{Parser: p, Writer: w, Reader: r}
+	return &EventConveyor{Parser: p, Writer: w, Reader: r,
+		Competitors: make(map[uint32]*service.CompetitorService)}
 }
 
 func (c *EventConveyor) StartProcessEvents() error {
@@ -40,14 +40,29 @@ func (c *EventConveyor) StartProcessEvents() error {
 		return nil
 	}
 
-	// Пока что просто вывод с подстановкой значений
 	for _, event := range events {
 		eventParsed, err := c.Parser.Parse(event)
 		if err != nil {
 			return err
 		}
 
+		if eventParsed.EventID == 1 {
+			c.Competitors[eventParsed.CompetitorID] = service.RegisterCompetitor(eventParsed.CompetitorID)
+		} else {
+			c.Competitors[eventParsed.CompetitorID].ProcessEvent(eventParsed)
+		}
+
 		c.Writer.InsertLog(eventParsed)
+	}
+
+	sortedResults := make([]*models.CompetitorResult, 0)
+	for _, serv := range c.Competitors {
+		sortedResults = append(sortedResults, serv.PrepareResults())
+	}
+
+	sort.Sort(models.ByDistanceTime(sortedResults))
+	for _, res := range sortedResults {
+		c.Writer.InsertResult(res)
 	}
 
 	c.Writer.Write()

@@ -1,64 +1,40 @@
 package service
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/Dmitriy-M1319/biatlon-prototype/internal/config"
 	"github.com/Dmitriy-M1319/biatlon-prototype/internal/models"
 )
 
-// TODO: Makefile для сборки бинаря
-
-type MainLap struct {
-	Start      time.Time
-	End        time.Time
-	Speed      float32
-	HitsCount  int
-	ShotsCount int
-}
-
-type PenaltyLap struct {
-	Start    time.Time
-	End      time.Time
-	Duration time.Duration
-}
-
 type CompetitorService struct {
 	CompetitorID      uint32
 	currentMainLap    int
 	currentPenaltyLap int
 	startTime         time.Time
-	MainLaps          []MainLap
-	PenaltyLaps       []PenaltyLap
+	MainLaps          []models.MainLap
+	PenaltyLaps       []models.PenaltyLap
 	StartFailed       bool
-}
-
-type CompetitorResult struct {
-	CompetitorID    uint32
-	Status          string
-	DistanceTime    time.Duration
-	MainLaps        []MainLap
-	PenaltyTime     time.Duration
-	PenaltyAvgSpeed float32
-	TotalHits       int
-	TotalShots      int
 }
 
 func RegisterCompetitor(cID uint32) *CompetitorService {
 	return &CompetitorService{CompetitorID: cID,
-		MainLaps: make([]MainLap, 0), PenaltyLaps: make([]PenaltyLap, 0)}
+		MainLaps: make([]models.MainLap, 0), PenaltyLaps: make([]models.PenaltyLap, 0)}
 }
 
-func (c *CompetitorService) PrepareResults() *CompetitorResult {
-	r := &CompetitorResult{MainLaps: c.MainLaps}
-	if len(c.MainLaps) < config.Config().Laps {
+func (c *CompetitorService) PrepareResults() *models.CompetitorResult {
+	r := &models.CompetitorResult{CompetitorID: c.CompetitorID}
+	c.MainLaps = c.MainLaps[:len(c.MainLaps)-1]
+	if (len(c.MainLaps) < config.Config().Laps) ||
+		(c.MainLaps[len(c.MainLaps)-1].Speed == 0.0) {
 		r.Status = "Not Finished"
 	} else if c.StartFailed {
 		r.Status = "Not Started"
 	} else {
 		r.DistanceTime = c.MainLaps[config.Config().Laps-1].End.Sub(c.startTime)
 	}
+
+	r.MainLaps = c.MainLaps
 
 	for _, lap := range c.MainLaps {
 		r.TotalHits += lap.HitsCount
@@ -68,7 +44,7 @@ func (c *CompetitorService) PrepareResults() *CompetitorResult {
 	for _, pen := range c.PenaltyLaps {
 		r.PenaltyTime += pen.Duration
 	}
-	r.PenaltyAvgSpeed = float32(config.Config().PenaltyLen*len(c.PenaltyLaps)) / float32(r.PenaltyTime.Seconds())
+	r.PenaltyAvgSpeed = float32(config.Config().PenaltyLen*(r.TotalShots-r.TotalHits)) / float32(r.PenaltyTime.Seconds())
 
 	return r
 }
@@ -82,7 +58,7 @@ func (c *CompetitorService) ProcessEvent(e models.EventParsedDto) {
 		c.processCompHasStarted(e)
 		break
 	case 6:
-		c.processCompHit(e)
+		c.processCompHit()
 		break
 	case 8:
 		c.processPenaltyLapEntered(e)
@@ -105,20 +81,17 @@ func (c *CompetitorService) processCompHasStarted(e models.EventParsedDto) {
 	if e.Timestamp.Sub(c.startTime) > config.Config().StartDeltaTime {
 		c.StartFailed = true
 	} else {
-		c.MainLaps = append(c.MainLaps, MainLap{Start: e.Timestamp})
+		c.MainLaps = append(c.MainLaps, models.MainLap{Start: e.Timestamp, ShotsCount: 5})
 		c.currentMainLap += 1
 	}
 }
 
-func (c *CompetitorService) processCompHit(e models.EventParsedDto) {
+func (c *CompetitorService) processCompHit() {
 	c.MainLaps[c.currentMainLap-1].HitsCount += 1
-	targetNumber, _ := strconv.Atoi(e.ExtraParams["target"])
-	c.MainLaps[c.currentMainLap-1].ShotsCount =
-		max(c.MainLaps[c.currentMainLap-1].ShotsCount, targetNumber)
 }
 
 func (c *CompetitorService) processPenaltyLapEntered(e models.EventParsedDto) {
-	c.PenaltyLaps = append(c.PenaltyLaps, PenaltyLap{Start: e.Timestamp})
+	c.PenaltyLaps = append(c.PenaltyLaps, models.PenaltyLap{Start: e.Timestamp})
 	c.currentPenaltyLap += 1
 }
 
@@ -131,5 +104,9 @@ func (c *CompetitorService) processPenaltyLapLeft(e models.EventParsedDto) {
 func (c *CompetitorService) processMainLapEnd(e models.EventParsedDto) {
 	c.MainLaps[c.currentMainLap-1].End = e.Timestamp
 	dur := e.Timestamp.Sub(c.MainLaps[c.currentMainLap-1].Start)
+	c.MainLaps[c.currentMainLap-1].Duration = dur
 	c.MainLaps[c.currentMainLap-1].Speed = float32(config.Config().LapLen) / float32(dur.Seconds())
+
+	c.MainLaps = append(c.MainLaps, models.MainLap{Start: e.Timestamp, ShotsCount: 5})
+	c.currentMainLap += 1
 }
