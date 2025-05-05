@@ -5,7 +5,7 @@
 make build
 ```
 ```bash
-./prototype -eventsFile=<event_file> -configFile=files<config_json_file>
+./prototype -eventsFile=<event_file> -configFile=<config_json_file>
 ```
 
 ## 2. Structure
